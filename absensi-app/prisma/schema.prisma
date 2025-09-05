@@ -1,0 +1,58 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id          String       @id @default(cuid())
+  email       String       @unique
+  name        String
+  password    String
+  grade       Int
+  subjects    String[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  attendances Attendance[]
+  students    Student[]
+
+  @@map("users")
+}
+
+model Student {
+  id          String       @id @default(cuid())
+  name        String
+  nis         String       @unique
+  grade       Int
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  teacherId   String
+  attendances Attendance[]
+  teacher     User         @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@map("students")
+}
+
+model Attendance {
+  id        String           @id @default(cuid())
+  date      DateTime         @default(now())
+  subject   String
+  status    AttendanceStatus
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  studentId String
+  teacherId String
+  student   Student          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  teacher   User             @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  @@map("attendances")
+}
+
+enum AttendanceStatus {
+  HADIR
+  IZIN
+  ALPA
+}
