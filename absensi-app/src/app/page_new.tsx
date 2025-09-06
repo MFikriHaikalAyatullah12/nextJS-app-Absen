@@ -30,8 +30,8 @@ export default function Home() {
           <h1 className="text-3xl font-bold text-gray-900 mb-2">
             Sistem Absensi
           </h1>
-          <p className="text-gray-600 mb-8">
-            Sistem manajemen absensi siswa untuk guru sekolah dasar
+          <p className="text-gray-600 mb-8 font-bold">
+            UPT SD Negeri 117 Inpres Bontomangape
           </p>
           
           <div className="space-y-4">
