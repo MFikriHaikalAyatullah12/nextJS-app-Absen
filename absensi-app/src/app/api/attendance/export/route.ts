@@ -119,7 +119,16 @@ export async function GET(request: NextRequest) {
             total: 0
           }
         }
-        acc[studentId][attendance.status.toLowerCase() as keyof Omit<StudentStats, 'name' | 'total'>]++
+        
+        const status = attendance.status.toUpperCase()
+        if (status === 'HADIR') {
+          acc[studentId].hadir++
+        } else if (status === 'IZIN') {
+          acc[studentId].izin++
+        } else if (status === 'ALFA') {
+          acc[studentId].alpa++
+        }
+        
         acc[studentId].total++
         return acc
       }, {} as Record<string, StudentStats>)
@@ -131,7 +140,7 @@ export async function GET(request: NextRequest) {
         [`Mata Pelajaran: ${subject}`],
         [`Periode: ${startDate ? new Date(startDate).toLocaleDateString('id-ID') : 'Semua'} - ${endDate ? new Date(endDate).toLocaleDateString('id-ID') : 'Semua'}`],
         [],
-        ['No', 'Nama Siswa', 'Hadir', 'Izin', 'Alpa', 'Total']
+        ['No', 'Nama Siswa', 'Total Hadir', 'Total Izin', 'Total Alfa', 'Total Keseluruhan']
       ]
 
       // Tambahkan data siswa
@@ -145,6 +154,23 @@ export async function GET(request: NextRequest) {
           student.total
         ])
       })
+
+      // Tambahkan baris total
+      const grandTotal = Object.values(studentStats).reduce((acc, student) => ({
+        hadir: acc.hadir + student.hadir,
+        izin: acc.izin + student.izin,
+        alpa: acc.alpa + student.alpa,
+        total: acc.total + student.total
+      }), { hadir: 0, izin: 0, alpa: 0, total: 0 })
+
+      sheetData.push([
+        '',
+        'TOTAL',
+        grandTotal.hadir,
+        grandTotal.izin,
+        grandTotal.alpa,
+        grandTotal.total
+      ])
 
       // Tambahkan detail absensi per tanggal
       sheetData.push([])
@@ -161,6 +187,16 @@ export async function GET(request: NextRequest) {
 
       // Buat worksheet
       const worksheet = XLSX.utils.aoa_to_sheet(sheetData)
+
+      // Set lebar kolom untuk readability yang lebih baik
+      worksheet['!cols'] = [
+        { wch: 5 },   // No
+        { wch: 25 },  // Nama Siswa
+        { wch: 14 },  // Total Hadir
+        { wch: 14 },  // Total Izin
+        { wch: 14 },  // Total Alfa
+        { wch: 20 },  // Total Keseluruhan
+      ]
 
       // Tambahkan worksheet ke workbook
       XLSX.utils.book_append_sheet(workbook, worksheet, subject.substring(0, 31)) // Excel sheet name max 31 chars

@@ -25,6 +25,11 @@ export default function Download() {
     fetchUser()
   }, [])
 
+  useEffect(() => {
+    // Set default periode ke "Minggu Ini" saat component mount
+    handlePeriodChange('week')
+  }, [])  // Empty dependency array is intentional for initial load only
+
   const fetchUser = async () => {
     try {
       const userResponse = await fetch('/api/auth/me')
@@ -46,22 +51,26 @@ export default function Download() {
 
     switch (period) {
       case 'week':
+        // Minggu ini - dari Senin sampai hari ini
         const startOfWeek = new Date(today)
-        startOfWeek.setDate(today.getDate() - today.getDay())
+        const dayOfWeek = today.getDay()
+        const daysToMonday = dayOfWeek === 0 ? 6 : dayOfWeek - 1 // 0 = Sunday, 1 = Monday
+        startOfWeek.setDate(today.getDate() - daysToMonday)
         startDate = startOfWeek.toISOString().split('T')[0]
         break
       case 'month':
+        // Bulan ini - dari tanggal 1 sampai hari ini
         startDate = new Date(today.getFullYear(), today.getMonth(), 1).toISOString().split('T')[0]
         break
       case 'semester':
-        // Assume semester starts in July or January
-        const currentMonth = today.getMonth()
-        if (currentMonth >= 6) {
-          // Second semester (July - December)
-          startDate = new Date(today.getFullYear(), 6, 1).toISOString().split('T')[0]
+        // Semester ini - sistem semester Indonesia
+        const currentMonth = today.getMonth() + 1 // getMonth() returns 0-11
+        if (currentMonth >= 7) {
+          // Semester ganjil (Juli - Desember)
+          startDate = new Date(today.getFullYear(), 6, 1).toISOString().split('T')[0] // July 1st
         } else {
-          // First semester (January - June)
-          startDate = new Date(today.getFullYear(), 0, 1).toISOString().split('T')[0]
+          // Semester genap (Januari - Juni)
+          startDate = new Date(today.getFullYear(), 0, 1).toISOString().split('T')[0] // January 1st
         }
         break
       case 'all':
@@ -81,6 +90,18 @@ export default function Download() {
   }
 
   const handleDownload = async () => {
+    // Validasi periode jika bukan "all"
+    if (filters.period !== 'all' && (!filters.startDate || !filters.endDate)) {
+      alert('Silakan pilih periode atau rentang tanggal yang valid')
+      return
+    }
+
+    // Validasi tanggal jika start date lebih besar dari end date
+    if (filters.startDate && filters.endDate && new Date(filters.startDate) > new Date(filters.endDate)) {
+      alert('Tanggal mulai tidak boleh lebih besar dari tanggal akhir')
+      return
+    }
+
     setIsDownloading(true)
 
     try {
@@ -185,22 +206,23 @@ export default function Download() {
               </label>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 {[
-                  { value: 'week', label: 'Minggu Ini', icon: '📅' },
-                  { value: 'month', label: 'Bulan Ini', icon: '📆' },
-                  { value: 'semester', label: 'Semester Ini', icon: '📚' },
-                  { value: 'all', label: 'Semua Data', icon: '📊' }
+                  { value: 'week', label: 'Minggu Ini', icon: '📅', desc: 'Senin - Hari ini' },
+                  { value: 'month', label: 'Bulan Ini', icon: '📆', desc: 'Tanggal 1 - Hari ini' },
+                  { value: 'semester', label: 'Semester Ini', icon: '📚', desc: 'Semester aktif' },
+                  { value: 'all', label: 'Semua Data', icon: '📊', desc: 'Seluruh periode' }
                 ].map(period => (
                   <button
                     key={period.value}
                     onClick={() => handlePeriodChange(period.value)}
-                    className={`flex flex-col items-center p-4 rounded-lg border-2 transition-colors ${
+                    className={`flex flex-col items-center p-4 rounded-lg border-2 transition-all duration-200 hover:shadow-md ${
                       filters.period === period.value
-                        ? 'border-blue-500 bg-blue-50 text-blue-700'
-                        : 'border-gray-200 hover:border-gray-300 text-gray-600'
+                        ? 'border-blue-500 bg-blue-50 text-blue-700 shadow-md'
+                        : 'border-gray-200 hover:border-blue-300 text-gray-600 hover:bg-blue-50'
                     }`}
                   >
                     <span className="text-2xl mb-2">{period.icon}</span>
-                    <span className="text-sm font-medium">{period.label}</span>
+                    <span className="text-sm font-medium mb-1">{period.label}</span>
+                    <span className="text-xs text-center text-gray-500">{period.desc}</span>
                   </button>
                 ))}
               </div>
@@ -221,7 +243,8 @@ export default function Download() {
                     id="startDate"
                     value={filters.startDate}
                     onChange={(e) => setFilters(prev => ({ ...prev, startDate: e.target.value, period: 'custom' }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white"
+                    style={{ colorScheme: 'light' }}
                   />
                 </div>
 
@@ -234,7 +257,8 @@ export default function Download() {
                     id="endDate"
                     value={filters.endDate}
                     onChange={(e) => setFilters(prev => ({ ...prev, endDate: e.target.value, period: 'custom' }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-gray-900 bg-white"
+                    style={{ colorScheme: 'light' }}
                   />
                 </div>
               </div>
@@ -242,18 +266,30 @@ export default function Download() {
 
             {/* Selected Period Info */}
             {filters.period && (
-              <div className="mb-6 p-4 bg-gray-50 rounded-lg">
+              <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
                 <h3 className="text-sm font-medium text-gray-900 mb-2">Periode yang Dipilih:</h3>
                 <div className="text-sm text-gray-600">
                   {filters.period === 'all' ? (
-                    <span>Semua data absensi</span>
+                    <span className="font-medium text-blue-600">Semua data absensi</span>
+                  ) : filters.period === 'week' ? (
+                    <span className="font-medium text-blue-600">
+                      Minggu ini: {filters.startDate ? new Date(filters.startDate).toLocaleDateString('id-ID') : ''} - {filters.endDate ? new Date(filters.endDate).toLocaleDateString('id-ID') : ''}
+                    </span>
+                  ) : filters.period === 'month' ? (
+                    <span className="font-medium text-blue-600">
+                      Bulan ini: {filters.startDate ? new Date(filters.startDate).toLocaleDateString('id-ID') : ''} - {filters.endDate ? new Date(filters.endDate).toLocaleDateString('id-ID') : ''}
+                    </span>
+                  ) : filters.period === 'semester' ? (
+                    <span className="font-medium text-blue-600">
+                      Semester ini: {filters.startDate ? new Date(filters.startDate).toLocaleDateString('id-ID') : ''} - {filters.endDate ? new Date(filters.endDate).toLocaleDateString('id-ID') : ''}
+                    </span>
                   ) : filters.startDate && filters.endDate ? (
-                    <span>
+                    <span className="font-medium text-blue-600">
                       {new Date(filters.startDate).toLocaleDateString('id-ID')} - {' '}
                       {new Date(filters.endDate).toLocaleDateString('id-ID')}
                     </span>
                   ) : (
-                    <span>Pilih rentang tanggal</span>
+                    <span className="text-amber-600">Pilih rentang tanggal</span>
                   )}
                 </div>
               </div>
