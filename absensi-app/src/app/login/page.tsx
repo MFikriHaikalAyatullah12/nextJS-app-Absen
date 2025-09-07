@@ -1,20 +1,31 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 
+interface LoginFormData {
+  email: string
+  password: string
+}
+
 export default function Login() {
   const router = useRouter()
-  const [formData, setFormData] = useState<{
-    email: string
-    password: string
-  }>({
+  const [mounted, setMounted] = useState(false)
+  const [formData, setFormData] = useState<LoginFormData>({
     email: '',
     password: ''
   })
   const [isLoading, setIsLoading] = useState<boolean>(false)
   const [error, setError] = useState<string>('')
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  if (!mounted) {
+    return null
+  }
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault()
@@ -106,6 +117,7 @@ export default function Login() {
               onChange={handleChange}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               placeholder="Masukkan email Anda"
+              suppressHydrationWarning
             />
           </div>
 
@@ -123,6 +135,7 @@ export default function Login() {
               className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-black bg-white"
               placeholder="Masukkan password Anda"
               style={{ WebkitTextFillColor: 'black' }}
+              suppressHydrationWarning
             />
           </div>
 
