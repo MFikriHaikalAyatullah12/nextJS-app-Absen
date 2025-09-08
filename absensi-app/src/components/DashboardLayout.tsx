@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import { useRouter, usePathname } from 'next/navigation'
 import Link from 'next/link'
+import { useOptimizedNavigation, preloadRoute, FastCache } from '@/lib/fast-navigation'
 
 interface User {
   id: string
@@ -48,10 +49,18 @@ const clearUserCache = () => {
 export default function DashboardLayout({ children }: DashboardLayoutProps) {
   const router = useRouter()
   const pathname = usePathname()
+  const { navigateTo, isNavigating } = useOptimizedNavigation()
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [mounted, setMounted] = useState(false)
+  const cache = FastCache.getInstance()
+
+  // Preload routes on component mount
+  useEffect(() => {
+    const routes = ['/dashboard/students', '/dashboard/attendance', '/dashboard/history', '/dashboard/download']
+    routes.forEach(route => preloadRoute(route))
+  }, [])
 
   // Prevent hydration mismatch
   useEffect(() => {
@@ -65,22 +74,43 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
 
   const fetchUser = useCallback(async () => {
     try {
+      // Check fast cache first
+      const cachedUser = cache.get('user-data')
+      if (cachedUser) {
+        setUser(cachedUser)
+        setIsLoading(false)
+        
+        // Background refresh
+        fetch('/api/auth/me')
+          .then(res => res.json())
+          .then(data => {
+            cache.set('user-data', data.user, 300000) // 5 minutes
+            setUser(data.user)
+            setUserToCache(data.user)
+          })
+          .catch(() => {})
+        return
+      }
+
       const response = await fetch('/api/auth/me')
       if (response.ok) {
         const data = await response.json()
         setUser(data.user)
         setUserToCache(data.user)
+        cache.set('user-data', data.user, 300000) // 5 minutes
       } else {
         clearUserCache()
+        cache.clear('user-data')
         router.push('/login')
       }
     } catch (error) {
       clearUserCache()
+      cache.clear('user-data')
       router.push('/login')
     } finally {
       setIsLoading(false)
     }
-  }, [router])
+  }, [router, cache])
 
   useEffect(() => {
     if (!mounted) return
@@ -131,8 +161,8 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Memuat...</p>
+          <div className="animate-spin rounded-full h-12 w-12 border-2 border-blue-600 border-t-transparent mx-auto"></div>
+          <p className="mt-2 text-gray-600 text-sm">Memuat...</p>
         </div>
       </div>
     )
@@ -175,18 +205,23 @@ export default function DashboardLayout({ children }: DashboardLayoutProps) {
             <ul className="space-y-2">
               {navigationItems.map((item) => (
                 <li key={item.path}>
-                  <Link
-                    href={item.path}
-                    prefetch={true}
-                    className={`flex items-center space-x-3 px-4 py-3 rounded-lg transition-colors ${
+                  <button
+                    onClick={() => navigateTo(item.path)}
+                    disabled={isNavigating}
+                    className={`w-full flex items-center space-x-3 px-4 py-3 rounded-lg transition-all duration-150 ${
                       pathname === item.path
                         ? 'bg-blue-50 text-blue-700 border-r-2 border-blue-700'
                         : 'text-gray-700 hover:bg-gray-50'
-                    }`}
+                    } ${isNavigating ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
                   >
                     <span className="text-lg">{item.icon}</span>
                     <span className="font-medium">{item.label}</span>
-                  </Link>
+                    {isNavigating && (
+                      <div className="ml-auto">
+                        <div className="animate-spin rounded-full h-4 w-4 border-2 border-blue-600 border-t-transparent"></div>
+                      </div>
+                    )}
+                  </button>
                 </li>
               ))}
             </ul>

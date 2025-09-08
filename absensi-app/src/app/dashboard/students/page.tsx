@@ -1,8 +1,10 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import DashboardLayout from '@/components/DashboardLayout'
 import { useOptimizedStudents } from '@/hooks/useApi'
+import { FastLoading } from '@/components/LoadingSpinner'
+import { FastCache } from '@/lib/fast-navigation'
 
 interface Student {
   id: string
@@ -15,11 +17,17 @@ interface Student {
 export default function Students() {
   const { data, loading: isLoading, error, refetch } = useOptimizedStudents()
   const students = data?.students || []
+  const cache = FastCache.getInstance()
   
   const [showModal, setShowModal] = useState(false)
   const [editingStudent, setEditingStudent] = useState<Student | null>(null)
   const [formData, setFormData] = useState({ name: '', nis: '' })
   const [isSubmitting, setIsSubmitting] = useState(false)
+
+  // Memoize sorted students untuk performa
+  const sortedStudents = useMemo(() => {
+    return [...students].sort((a, b) => a.name.localeCompare(b.name))
+  }, [students])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -38,6 +46,20 @@ export default function Students() {
       })
 
       if (response.ok) {
+        // Optimistic update untuk UI yang lebih responsive
+        if (editingStudent) {
+          const updatedStudents = students.map(s => 
+            s.id === editingStudent.id 
+              ? { ...s, ...formData }
+              : s
+          )
+          cache.set('students', { students: updatedStudents }, 60000)
+        } else {
+          const newStudent = await response.json()
+          const updatedStudents = [...students, newStudent.student]
+          cache.set('students', { students: updatedStudents }, 60000)
+        }
+        
         await refetch()
         setShowModal(false)
         setEditingStudent(null)
@@ -87,10 +109,7 @@ export default function Students() {
   if (isLoading) {
     return (
       <DashboardLayout>
-        <div className="text-center py-8">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Memuat data siswa...</p>
-        </div>
+        <FastLoading message="Memuat data siswa..." />
       </DashboardLayout>
     )
   }

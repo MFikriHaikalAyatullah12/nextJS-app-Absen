@@ -3,8 +3,8 @@ import { db } from './db'
 // Helper function untuk retry database operations saat Neon database sleep
 export async function withRetry<T>(
   operation: () => Promise<T>,
-  maxRetries: number = 3,
-  delay: number = 1000
+  maxRetries: number = 2, // Kurangi retry untuk kecepatan
+  delay: number = 500 // Delay lebih kecil
 ): Promise<T> {
   let lastError: Error
   
@@ -21,7 +21,7 @@ export async function withRetry<T>(
       ) {
         console.log(`Database connection attempt ${attempt} failed, retrying in ${delay}ms...`)
         await new Promise(resolve => setTimeout(resolve, delay))
-        delay *= 2 // Exponential backoff
+        delay *= 1.5 // Exponential backoff yang lebih cepat
         continue
       }
       
