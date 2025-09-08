@@ -1,7 +1,9 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import DashboardLayout from '@/components/DashboardLayout'
+import { FastLoading } from '@/components/LoadingSpinner'
+import { fastFetch, FastCache } from '@/lib/fast-navigation'
 
 interface Student {
   id: string
@@ -30,6 +32,13 @@ export default function Attendance() {
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
+  const cache = FastCache.getInstance()
+
+  // Memoize filtered students untuk performa
+  const filteredStudents = useMemo(() => {
+    if (!user) return []
+    return students.filter(student => student.grade === user.grade)
+  }, [students, user])
 
   useEffect(() => {
     fetchInitialData()
@@ -37,17 +46,19 @@ export default function Attendance() {
 
   const fetchInitialData = async () => {
     try {
-      // Fetch user data
-      const userResponse = await fetch('/api/auth/me')
-      if (userResponse.ok) {
-        const userData = await userResponse.json()
+      setIsLoading(true)
+      
+      // Parallel fetch untuk kecepatan
+      const [userData, studentsData] = await Promise.all([
+        fastFetch('/api/auth/me'),
+        fastFetch('/api/students')
+      ])
+
+      if (userData.user) {
         setUser(userData.user)
       }
 
-      // Fetch students
-      const studentsResponse = await fetch('/api/students')
-      if (studentsResponse.ok) {
-        const studentsData = await studentsResponse.json()
+      if (studentsData.students) {
         setStudents(studentsData.students)
         
         // Initialize attendance data
@@ -127,10 +138,7 @@ export default function Attendance() {
   if (isLoading) {
     return (
       <DashboardLayout>
-        <div className="text-center py-8">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Memuat data...</p>
-        </div>
+        <FastLoading message="Memuat data..." />
       </DashboardLayout>
     )
   }

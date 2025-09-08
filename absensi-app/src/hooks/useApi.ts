@@ -1,34 +1,44 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
+import { FastCache } from '@/lib/fast-navigation'
 
 interface UseApiOptions {
   cacheKey?: string
-  cacheDuration?: number // dalam ms, default 5 menit
+  cacheDuration?: number // dalam ms, default 2 menit untuk response lebih cepat
+  immediate?: boolean // immediate return dari cache
 }
-
-// Simple cache untuk data yang sering diakses
-const cache = new Map<string, { data: any; timestamp: number }>()
 
 export function useApi<T>(
   url: string, 
   options: UseApiOptions = {}
 ) {
-  const { cacheKey, cacheDuration = 5 * 60 * 1000 } = options
+  const { cacheKey, cacheDuration = 2 * 60 * 1000, immediate = true } = options
   const [data, setData] = useState<T | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const cache = FastCache.getInstance()
 
   const fetchData = useCallback(async (forceRefresh = false) => {
     const key = cacheKey || url
 
-    // Check cache first
-    if (!forceRefresh && cache.has(key)) {
-      const cached = cache.get(key)!
-      if (Date.now() - cached.timestamp < cacheDuration) {
-        setData(cached.data)
+    // Immediate cache return untuk responsiveness
+    if (!forceRefresh && immediate) {
+      const cached = cache.get(key)
+      if (cached) {
+        setData(cached)
         setLoading(false)
-        return cached.data
+        
+        // Background refresh
+        fetch(url)
+          .then(res => res.json())
+          .then(result => {
+            cache.set(key, result, cacheDuration)
+            setData(result)
+          })
+          .catch(() => {}) // Silent background refresh
+        
+        return cached
       }
     }
 
@@ -36,7 +46,13 @@ export function useApi<T>(
       setLoading(true)
       setError(null)
       
-      const response = await fetch(url)
+      const response = await fetch(url, {
+        // Tambahkan cache headers untuk optimasi browser
+        headers: {
+          'Cache-Control': 'max-age=60'
+        }
+      })
+      
       if (!response.ok) {
         throw new Error(`HTTP ${response.status}`)
       }
@@ -44,7 +60,7 @@ export function useApi<T>(
       const result = await response.json()
       
       // Cache the result
-      cache.set(key, { data: result, timestamp: Date.now() })
+      cache.set(key, result, cacheDuration)
       
       setData(result)
       return result
@@ -55,7 +71,7 @@ export function useApi<T>(
     } finally {
       setLoading(false)
     }
-  }, [url, cacheKey, cacheDuration])
+  }, [url, cacheKey, cacheDuration, immediate, cache])
 
   const refetch = useCallback(() => fetchData(true), [fetchData])
 
@@ -67,8 +83,9 @@ export function useApi<T>(
 }
 
 export function clearCache(key?: string) {
+  const cache = FastCache.getInstance()
   if (key) {
-    cache.delete(key)
+    cache.clear(key)
   } else {
     cache.clear()
   }
@@ -77,13 +94,13 @@ export function clearCache(key?: string) {
 export function useOptimizedStudents() {
   return useApi<{ students: any[] }>('/api/students', {
     cacheKey: 'students',
-    cacheDuration: 2 * 60 * 1000 // 2 menit
+    cacheDuration: 60000 // 1 menit untuk data yang lebih fresh
   })
 }
 
 export function useOptimizedUser() {
   return useApi<{ user: any }>('/api/auth/me', {
     cacheKey: 'user',
-    cacheDuration: 10 * 60 * 1000 // 10 menit
+    cacheDuration: 300000 // 5 menit
   })
 }

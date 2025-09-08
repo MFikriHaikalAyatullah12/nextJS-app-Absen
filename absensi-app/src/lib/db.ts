@@ -8,6 +8,16 @@ export const db =
   globalForPrisma.prisma ??
   new PrismaClient({
     log: ['query'],
+    datasources: {
+      db: {
+        url: process.env.DATABASE_URL,
+      },
+    },
   })
 
-if (process.env.NODE_ENV !== 'production') globalForPrisma.prisma = db
+// Warm up connection untuk mengurangi cold start
+if (process.env.NODE_ENV !== 'production') {
+  globalForPrisma.prisma = db
+  // Pre-connect untuk mengurangi delay pertama kali
+  db.$connect().catch(() => {})
+}
