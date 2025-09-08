@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { db } from '@/lib/db'
+import { dbOperations } from '@/lib/db-helper'
 import { hashPassword } from '@/lib/auth'
 import { SUBJECTS_BY_GRADE } from '@/lib/constants'
 
@@ -35,9 +36,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Cek apakah email sudah ada
-    const existingUser = await db.user.findUnique({
-      where: { email }
-    })
+    const existingUser = await dbOperations.findUserByEmail(email)
 
     if (existingUser) {
       return NextResponse.json(
@@ -50,14 +49,12 @@ export async function POST(request: NextRequest) {
     const hashedPassword = await hashPassword(password)
 
     // Buat user baru
-    const user = await db.user.create({
-      data: {
-        email,
-        password: hashedPassword,
-        name,
-        grade,
-        subjects
-      }
+    const user = await dbOperations.createUser({
+      email,
+      password: hashedPassword,
+      name,
+      grade,
+      subjects
     })
 
     // Return user tanpa password
